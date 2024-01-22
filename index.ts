@@ -3,14 +3,27 @@ const suggestionsDiv = document.getElementById('suggestions') as HTMLDivElement;
 const searchResultsDiv = document.getElementById('searchResults') as HTMLDivElement;
 const lastSearchList = document.getElementById('lastSearchList') as HTMLUListElement;
 
-searchInput.addEventListener('input', () => {
+
+function debounce(func: (...args: unknown[]) => void, timeout: number) {
+    let timer: ReturnType<typeof setTimeout>;
+    return function(this: unknown, ...args: unknown[]) {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            func.apply(this, args);
+        }, timeout);
+    };
+}
+
+const handleInput = () => {
     const query = searchInput.value.trim();
     if (query) {
         searchSuggestions(query);
     } else {
         suggestionsDiv.innerHTML = '';
     }
-});
+};
+
+searchInput.addEventListener('input', debounce(handleInput, 300));
 
 interface ShowData {
     name: string;
@@ -22,37 +35,27 @@ interface ShowData {
     summary: string;
 }
 
-
 function searchSuggestions(query: string) {
     suggestionsDiv.innerHTML = '';
     suggestionsDiv.classList.remove('visible');
 
     const previousSearches = getPreviousSearches();
-    console.log('previousSearches ', previousSearches);
+    const filteredPreviousSearches = previousSearches
+        .filter((previousQuery) =>
+            previousQuery.name.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 5);
 
-    const filteredPreviousSearches = previousSearches.filter((previousQuery) =>
-        previousQuery.name.toLowerCase().includes(query.toLowerCase())
-    );
 
-    for (let i = 0; i < filteredPreviousSearches.length && i < 5; i++) {
-        const suggestionItem = document.createElement('div');
-        suggestionItem.classList.add('suggestionsItem');
-        suggestionItem.classList.add('violet');
-        suggestionItem.textContent = filteredPreviousSearches[i].name;
-        suggestionItem.addEventListener('click', () => {
-            searchInput.value = filteredPreviousSearches[i].name;
-            showSearchResult(filteredPreviousSearches[i]);
-        });
-
-        suggestionsDiv.appendChild(suggestionItem);
-    }
-    const countApiSuggestions = 10 - suggestionsDiv.childElementCount;
-
-    console.log('suggestionsDiv.count ', suggestionsDiv.childElementCount);
     fetch(`https://api.tvmaze.com/search/shows?q=${query}`)
-        .then((response) => response.json())
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error('Network error');
+            }
+            return response.json();
+        })
         .then((data: { show: ShowData}[]) => {
-            for (let i = 0; i < data.length && i < countApiSuggestions; i++) {
+
+            for (let i = 0; i < data.length && i < 10; i++) {
                 const suggestionItem = document.createElement('div');
                 suggestionItem.classList.add('suggestionsItem');
                 suggestionItem.textContent = data[i].show.name;
@@ -60,8 +63,16 @@ function searchSuggestions(query: string) {
                     searchInput.value = data[i].show.name;
                     showSearchResult(data[i].show);
                 });
+                if (filteredPreviousSearches.some((previousSearch) =>
+                    previousSearch.name.toLowerCase() === data[i].show.name.toLowerCase()
+                )) {
+                    suggestionItem.classList.add('violet');
+                    suggestionsDiv.prepend(suggestionItem);
 
-                suggestionsDiv.appendChild(suggestionItem);
+                }
+                else {
+                    suggestionsDiv.append(suggestionItem);
+                }
             }
         })
         .catch((error) => {
@@ -87,30 +98,43 @@ function showSearchResult(showData: ShowData) {
     searchResultsDiv.appendChild(title);
 
     const genres = document.createElement('p');
-    genres.innerHTML = `<b>Жанры:</b> ${showData.genres.join(', ')}`;
+    genres.innerHTML = `<b>Genres:</b> ${showData.genres.join(', ')}`;
     searchResultsDiv.appendChild(genres);
 
     const premiered = document.createElement('p');
-    premiered.innerHTML = `<b>Премьера:</b> ${showData.premiered}`;
+    premiered.innerHTML = `<b>Premiered:</b> ${showData.premiered}`;
     searchResultsDiv.appendChild(premiered);
 
     const summary = document.createElement('p');
     summary.innerHTML = showData.summary;
     searchResultsDiv.appendChild(summary);
 
+    console.log("saveSearchQuery");
     saveSearchQuery(showData);
+    console.log("updateLastSearches");
     updateLastSearches();
 }
 
+
 function getPreviousSearches(): ShowData[] {
     const previousSearches = localStorage.getItem('previousSearches');
-    return previousSearches ? JSON.parse(previousSearches) : [];
+    try {
+        return previousSearches ? JSON.parse(previousSearches) : [];
+    } catch (error) {
+        console.error('Error parsing previous searches:', error);
+        return [];
+    }
 }
 
 function saveSearchQuery(showData: ShowData) {
     const previousSearches = getPreviousSearches();
     previousSearches.unshift(showData);
-    localStorage.setItem('previousSearches', JSON.stringify(previousSearches));
+    try {
+        localStorage.setItem('previousSearches', JSON.stringify(previousSearches));
+        console.log('saveSearchQuery inside');
+    } catch (error) {
+        console.error('Error saving search:', error);
+    }
 }
 
 function updateLastSearches() {
@@ -125,4 +149,6 @@ function updateLastSearches() {
     }
 }
 
-updateLastSearches();
+window.addEventListener('storage', (event) => {
+    updateLastSearches();
+});
