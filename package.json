@@ -1,0 +1,19 @@
+{
+  "name": "JS-AJAX",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint-staged": "lint-staged",
+    "http-server": "http-server"
+  },
+  "devDependencies": {
+    "eslint": "8.29.0",
+    "eslint-config-prettier": "8.5.0",
+    "eslint-plugin-prettier": "4.2.1",
+    "http-server": "14.1.1",
+    "lint-staged": "13.1.0",
+    "prettier": "2.8.0",
+    "typescript": "5.3.3"
+  }
+}
